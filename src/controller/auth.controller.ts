@@ -33,6 +33,7 @@ export const registerHandler = async (req: Request, res: Response) => {
 
     // checking if OTP expired
     if (record.expiresAt < new Date()) {
+      await OTPModel.deleteOne({ email });
       return res.status(400).json({ error: "OTP has expired" });
     }
 
@@ -57,18 +58,25 @@ export const registerHandler = async (req: Request, res: Response) => {
  * @route /auth/get-otp
  */
 export const getOTPHandler = async (req: Request, res: Response) => {
-  const { email } = req.body;
-  const otp = generateOTP();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-
-  await OTPModel.create({ email, otp, expiresAt });
-
   try {
+    const { email } = req.body;
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    // upsert to avoid duplicate OTP records
+    await OTPModel.findOneAndUpdate(
+      { email },
+      { otp, expiresAt },
+      { upsert: true, new: true }
+    );
+
     await sendOTP(email, otp);
-    console.log("OTP sent " + "to: " + email);
+    console.log("OTP sent to:", email);
+
+    return res.status(200).json({ success: true, message: "OTP sent" });
   } catch (err) {
     console.error("Error sending OTP:", err);
+    return res.status(500).json({ success: false, message: "Failed to send OTP" });
   }
 };
 
@@ -78,18 +86,25 @@ export const getOTPHandler = async (req: Request, res: Response) => {
  * @route /auth/resend-otp
  */
 export const resendOTPHandler = async (req: Request, res: Response) => {
-  const { email } = req.body;
-  const otp = generateOTP();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-  await OTPModel.deleteOne({ email });
-  await OTPModel.create({ email, otp, expiresAt });
-
   try {
+    const { email } = req.body;
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    // replace old OTP with new one
+    await OTPModel.findOneAndUpdate(
+      { email },
+      { otp, expiresAt },
+      { upsert: true, new: true }
+    );
+
     await sendOTP(email, otp);
-    console.log("OTP sent " + "to: " + email);
+    console.log("Resent OTP to:", email);
+
+    return res.status(200).json({ success: true, message: "OTP resent" });
   } catch (err) {
-    console.error("Error sending OTP:", err);
+    console.error("Error resending OTP:", err);
+    return res.status(500).json({ success: false, message: "Failed to resend OTP" });
   }
 };
 
@@ -130,8 +145,9 @@ export const signinHandler = async (req: Request, res: Response) => {
     // issue a token
     const token = encode(user);
 
-    res.status(200).json({ token });
+    return res.status(200).json({ token });
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    console.error("Signin error:", e);
+    return res.status(500).json({ error: (e as Error).message });
   }
 };

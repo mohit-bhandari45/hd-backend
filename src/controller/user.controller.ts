@@ -5,7 +5,6 @@ import { Content } from "../model/content.model";
 
 export const getUserDetails = async(req: Request,res:Response)=>{
   const user=req.user as IUser;
-  console.log(user);
   try{
     const found= await User.findById(user.id);
     res.status(200).json(found);
@@ -19,7 +18,6 @@ export const getUserDetails = async(req: Request,res:Response)=>{
 export const addContentHandler = async (req: Request, res: Response) => {
   const { title, body } = req.body;
   const user = req.user as IUser;
-console.log(user)
   try {
     await Content.create({
       title,
